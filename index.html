@@ -1,0 +1,1002 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI 生图提示词助手 · 视觉组</title>
+<style>
+:root {
+  --bg: #f5f5f0;
+  --panel-bg: #ffffff;
+  --text: #1a1a1a;
+  --text-secondary: #666;
+  --border: #e8e8e4;
+  --accent: #2c2c2c;
+  --accent-hover: #444;
+  --tag-bg: #f0f0eb;
+  --tag-text: #555;
+  --input-bg: #fafaf8;
+  --danger: #d94a4a;
+  --radius: 10px;
+  --shadow: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.06);
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Header */
+header {
+  height: 52px;
+  background: var(--panel-bg);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+header h1 { font-size: 15px; font-weight: 600; letter-spacing: -0.2px; }
+header .api-config { display: flex; align-items: center; gap: 8px; }
+header .api-config input {
+  font-size: 12px; padding: 5px 10px; border: 1px solid var(--border);
+  border-radius: 6px; width: 280px; font-family: monospace;
+  background: var(--input-bg);
+}
+header .api-config button {
+  font-size: 12px; padding: 5px 12px; background: var(--accent);
+  color: #fff; border: none; border-radius: 6px; cursor: pointer;
+}
+header .api-config .status { font-size: 11px; color: var(--text-secondary); }
+
+/* Main Layout */
+main {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  gap: 1px;
+  background: var(--border);
+}
+
+/* Left Panel */
+.left-panel {
+  width: 420px;
+  min-width: 380px;
+  background: var(--panel-bg);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+/* Image Upload Area */
+.upload-section {
+  padding: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.upload-zone {
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  height: 200px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+  position: relative;
+  overflow: hidden;
+}
+.upload-zone:hover { border-color: #aaa; background: #fafaf8; }
+.upload-zone.has-image { border-style: solid; border-color: var(--border); cursor: default; }
+.upload-zone img {
+  width: 100%; height: 100%; object-fit: cover; position: absolute; top: 0; left: 0;
+}
+.upload-zone .placeholder {
+  color: var(--text-secondary); font-size: 13px; text-align: center; line-height: 1.6;
+  z-index: 1;
+}
+.upload-zone .placeholder .icon { font-size: 28px; margin-bottom: 4px; }
+.upload-zone .remove-btn {
+  position: absolute; top: 8px; right: 8px; z-index: 2;
+  background: rgba(0,0,0,0.5); color: #fff; border: none; border-radius: 50%;
+  width: 26px; height: 26px; font-size: 14px; cursor: pointer; display: none;
+}
+.upload-zone.has-image .remove-btn { display: flex; align-items: center; justify-content: center; }
+.upload-actions {
+  display: flex; gap: 8px; margin-top: 8px;
+}
+.upload-actions button {
+  flex: 1; padding: 7px 0; font-size: 12px; border: 1px solid var(--border);
+  border-radius: 6px; background: var(--input-bg); cursor: pointer; color: var(--text);
+}
+.upload-actions button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.upload-actions button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Analysis Result */
+.analysis-result {
+  margin-top: 8px;
+  padding: 10px 12px;
+  background: var(--tag-bg);
+  border-radius: 6px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  max-height: 100px;
+  overflow-y: auto;
+  display: none;
+}
+.analysis-result.show { display: block; }
+
+/* Config Section */
+.config-section {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.config-section h3 {
+  font-size: 12px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.5px; color: var(--text-secondary); margin-bottom: 10px;
+}
+
+/* Tag Selectors */
+.tag-group { display: flex; flex-wrap: wrap; gap: 6px; }
+.tag {
+  font-size: 11px; padding: 5px 10px; border: 1px solid var(--border);
+  border-radius: 16px; cursor: pointer; transition: all 0.15s;
+  background: var(--input-bg); color: var(--tag-text); white-space: nowrap;
+}
+.tag:hover { border-color: #aaa; }
+.tag.selected { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+/* Dimension Selector */
+.dim-group { display: flex; gap: 8px; align-items: center; }
+.dim-group select {
+  font-size: 12px; padding: 6px 10px; border: 1px solid var(--border);
+  border-radius: 6px; background: var(--input-bg); font-family: var(--font);
+}
+.dim-group .custom-size { display: flex; gap: 4px; align-items: center; }
+.dim-group .custom-size input {
+  width: 52px; font-size: 12px; padding: 5px 6px; border: 1px solid var(--border);
+  border-radius: 6px; background: var(--input-bg); text-align: center;
+}
+.dim-group .custom-size span { font-size: 11px; color: var(--text-secondary); }
+
+/* Constraint Shortcut */
+.constraint-toggle {
+  display: flex; align-items: center; gap: 6px; font-size: 12px;
+  margin-top: 6px; cursor: pointer;
+}
+.constraint-toggle input[type="checkbox"] { width: 14px; height: 14px; }
+
+/* Right Panel - Chat */
+.right-panel {
+  flex: 1;
+  background: var(--panel-bg);
+  display: flex;
+  flex-direction: column;
+  min-width: 380px;
+}
+
+.chat-header {
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.chat-header h2 { font-size: 14px; font-weight: 600; }
+.chat-header .actions { display: flex; gap: 6px; }
+.chat-header .actions button {
+  font-size: 11px; padding: 5px 10px; border: 1px solid var(--border);
+  border-radius: 6px; background: var(--input-bg); cursor: pointer;
+}
+
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.message {
+  max-width: 90%;
+  animation: fadeIn 0.25s ease-out;
+}
+@keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+.message.system {
+  align-self: flex-start;
+  background: var(--tag-bg);
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+.message.user {
+  align-self: flex-end;
+  background: #e8e8e4;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.message.assistant {
+  align-self: flex-start;
+  padding: 14px 18px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.7;
+  background: #fdfdfc;
+}
+.message.assistant .prompt-block {
+  background: #f8f8f4;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px 14px;
+  margin: 8px 0;
+  font-size: 12px;
+  white-space: pre-wrap;
+  line-height: 1.6;
+}
+
+.chat-input-area {
+  padding: 12px 20px 16px;
+  border-top: 1px solid var(--border);
+  display: flex; gap: 8px;
+}
+.chat-input-area textarea {
+  flex: 1;
+  resize: none;
+  font-size: 13px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-family: var(--font);
+  background: var(--input-bg);
+  line-height: 1.5;
+  max-height: 100px;
+  min-height: 44px;
+}
+.chat-input-area textarea:focus { outline: none; border-color: #aaa; }
+.chat-input-area button {
+  padding: 0 18px;
+  background: var(--accent); color: #fff; border: none;
+  border-radius: 10px; cursor: pointer; font-size: 13px; font-weight: 500;
+}
+.chat-input-area button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.prompt-presets {
+  padding: 8px 20px 4px;
+  display: flex; gap: 6px; flex-wrap: wrap;
+}
+.prompt-presets .preset {
+  font-size: 11px; padding: 4px 10px; border: 1px solid var(--border);
+  border-radius: 14px; cursor: pointer; background: var(--input-bg);
+  color: var(--tag-text); transition: all 0.15s;
+}
+.prompt-presets .preset:hover { border-color: #aaa; }
+
+/* Toast */
+.toast {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+  background: var(--accent); color: #fff; padding: 8px 18px;
+  border-radius: 8px; font-size: 12px; z-index: 999;
+  opacity: 0; transition: opacity 0.2s;
+  pointer-events: none;
+}
+.toast.show { opacity: 1; }
+
+/* Loading spinner */
+.spinner {
+  display: inline-block; width: 16px; height: 16px;
+  border: 2px solid var(--border); border-top-color: var(--accent);
+  border-radius: 50%; animation: spin 0.6s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #d0d0cc; border-radius: 10px; }
+
+@media (max-width: 900px) {
+  main { flex-direction: column; }
+  .left-panel { width: 100%; min-width: 0; max-height: 50vh; }
+  .right-panel { min-width: 0; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>AI 生图提示词助手</h1>
+  <div class="api-config">
+    <span class="status" id="apiStatus">未连接</span>
+    <select id="providerSelect" onchange="onProviderChange()">
+      <option value="anthropic">Anthropic</option>
+      <option value="openai">OpenAI</option>
+      <option value="gemini">Google Gemini</option>
+      <option value="deepseek">DeepSeek</option>
+      <option value="custom">自定义接口</option>
+    </select>
+    <input type="text" id="modelInput" value="claude-sonnet-4-20250514" placeholder="模型名" />
+    <input type="text" id="endpointInput" placeholder="自定义 Endpoint" style="display:none;width:220px" />
+    <input type="password" id="apiKeyInput" placeholder="输入 API Key" />
+    <button onclick="saveApiKey()">连接</button>
+  </div>
+</header>
+
+<main>
+  <!-- Left Panel -->
+  <div class="left-panel">
+    <!-- Image Upload -->
+    <div class="upload-section">
+      <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+        <div class="placeholder">
+          <div class="icon">🖼️</div>
+          <div>点击或拖拽上传参考图</div>
+          <div style="font-size:10px;color:#aaa;">支持 JPG / PNG / WebP</div>
+        </div>
+        <button class="remove-btn" onclick="event.stopPropagation(); clearImage()">✕</button>
+      </div>
+      <input type="file" id="fileInput" accept="image/*" style="display:none" onchange="handleImageUpload(event)" />
+      <div class="upload-actions">
+        <button class="primary" id="analyzeBtn" onclick="analyzeImage()" disabled>🔍 AI 识别参考图</button>
+        <button onclick="document.getElementById('fileInput').click()">重新选择</button>
+      </div>
+      <div class="analysis-result" id="analysisResult"></div>
+    </div>
+
+    <!-- Scene Type -->
+    <div class="config-section">
+      <h3>场景类型</h3>
+      <div class="tag-group" id="sceneTags"></div>
+    </div>
+
+    <!-- Booth Type -->
+    <div class="config-section">
+      <h3>展位类型（可选）</h3>
+      <div class="tag-group" id="boothTags"></div>
+    </div>
+
+    <!-- Style -->
+    <div class="config-section">
+      <h3>风格定位</h3>
+      <div class="tag-group" id="styleTags"></div>
+    </div>
+
+    <!-- Dimensions -->
+    <div class="config-section">
+      <h3>尺寸 / 比例</h3>
+      <div class="dim-group">
+        <select id="ratioSelect" onchange="onRatioChange()">
+          <option value="16:9">16:9 横屏</option>
+          <option value="4:3">4:3</option>
+          <option value="3:4">3:4 竖屏</option>
+          <option value="1:1">1:1 方形</option>
+          <option value="9:16">9:16 手机竖屏</option>
+          <option value="2.35:1">2.35:1 电影宽幅</option>
+          <option value="custom">自定义</option>
+        </select>
+        <div class="custom-size" id="customSize" style="display:none;">
+          <input type="number" id="customW" value="1920" min="64" />
+          <span>×</span>
+          <input type="number" id="customH" value="1080" min="64" />
+        </div>
+      </div>
+    </div>
+
+    <!-- Camera / Lens -->
+    <div class="config-section">
+      <h3>镜头语言</h3>
+      <div class="tag-group" id="lensTags"></div>
+    </div>
+
+    <!-- Lighting -->
+    <div class="config-section">
+      <h3>光照条件</h3>
+      <div class="tag-group" id="lightTags"></div>
+    </div>
+
+    <!-- Constraint -->
+    <div class="config-section">
+      <h3>约束选项</h3>
+      <label class="constraint-toggle">
+        <input type="checkbox" id="strictAngle" checked />
+        角度100%严格不变动，严格遵循画布占比
+      </label>
+    </div>
+  </div>
+
+  <!-- Right Panel -->
+  <div class="right-panel">
+    <div class="chat-header">
+      <h2>AI 提示词对话</h2>
+      <div class="actions">
+        <button onclick="generateFromConfig()">根据左侧配置生成</button>
+        <button onclick="clearChat()">清空对话</button>
+      </div>
+    </div>
+
+    <div class="prompt-presets">
+      <span class="preset" onclick="usePreset('full')">完整提示词框架</span>
+      <span class="preset" onclick="usePreset('scene')">仅场景+风格</span>
+      <span class="preset" onclick="usePreset('booth')">展位场景图</span>
+      <span class="preset" onclick="usePreset('detail')">细节增强</span>
+      <span class="preset" onclick="usePreset('translate')">翻译为英文</span>
+    </div>
+
+    <div class="chat-messages" id="chatMessages">
+      <div class="message system">
+        你好！我是 AI 提示词助手。你可以：<br>
+        · 上传参考图后点击「AI 识别」分析图片内容<br>
+        · 在左侧选择场景、风格、尺寸等选项<br>
+        · 点击「根据左侧配置生成」自动组装提示词<br>
+        · 或在下方输入框自由对话，我会帮你优化提示词<br>
+        · 点击上方快捷标签快速使用常用功能
+      </div>
+    </div>
+
+    <div class="chat-input-area">
+      <textarea id="chatInput" rows="1" placeholder="描述你想要的画面，或直接让我帮你优化提示词…" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage();}"></textarea>
+      <button id="sendBtn" onclick="sendMessage()">发送</button>
+    </div>
+  </div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ===== State =====
+let uploadedImageData = null;
+let apiKey = localStorage.getItem('api_key') || '';
+let provider = localStorage.getItem('provider') || 'anthropic';
+let modelName = localStorage.getItem('model_name') || '';
+let customEndpoint = localStorage.getItem('custom_endpoint') || '';
+let selectedConfig = {
+  scene: '', booth: '', style: '', ratio: '16:9',
+  customW: 1920, customH: 1080, lens: '', lighting: '', strictAngle: true
+};
+
+// ===== Provider Defaults =====
+const PROVIDER_DEFAULTS = {
+  anthropic: { model: 'claude-sonnet-4-20250514', endpoint: 'https://api.anthropic.com/v1/messages' },
+  openai:     { model: 'gpt-4o',                        endpoint: 'https://api.openai.com/v1/chat/completions' },
+  gemini:     { model: 'gemini-2.5-flash',               endpoint: '' },
+  deepseek:   { model: 'deepseek-chat',                  endpoint: 'https://api.deepseek.com/v1/chat/completions' },
+  custom:     { model: '',                               endpoint: '' }
+};
+
+// ===== Config Data =====
+const SCENES = [
+  '线下门店 / 快闪店', '品牌展厅 / 体验中心', '国际展会 / 行业博览会',
+  '科技/工业企业展厅', '体育赛事补给区', '马拉松/骑行赛事服务区',
+  '户外品牌快闪活动', '商业路演 / 地推活动', '展会外场接待区',
+  '音乐节 / 社区活动', '城市公园 / 户外广场', '户外乡村 / 自然场景'
+];
+const BOOTHS = [
+  '岛型布置 (island booth)', '半岛式展位 (peninsula booth)',
+  '围墙式展位 (perimeter booth)', '角落布置 (corner booth)',
+  '线性布置 (line booth)', '不指定展位类型'
+];
+const STYLES = [
+  '高端商业摄影', '真实户外活动照片', '自然清新纪实',
+  '品牌活动宣传照', '赛事现场纪实', '高档品牌氛围',
+  '电影质感', '极简干净', '不要AI合成/塑料感'
+];
+const LENSES = [
+  '广角镜头', '视线水平视角', '正面3/4视图', '浅景深',
+  'DSLR相机拍摄', '正面平视', '高角度俯拍/鸟瞰',
+  '中等距离拍摄', '以产品为中心的框架', '简洁的构图'
+];
+const LIGHTINGS = [
+  '晴朗白天自然光', '明亮通透', '硬阴影/清晰阴影',
+  '自然阳光照射', '树荫斑驳光', '黄金时刻暖光',
+  '柔和漫射光', '阴天柔和光', '日落逆光'
+];
+
+// ===== Init =====
+function init() {
+  document.getElementById('providerSelect').value = provider;
+  onProviderChange(false); // don't reset saved values
+  if (apiKey) document.getElementById('apiKeyInput').value = apiKey;
+  updateStatus();
+
+  renderTags('sceneTags', SCENES, 'scene');
+  renderTags('boothTags', BOOTHS, 'booth');
+  renderTags('styleTags', STYLES, 'style');
+  renderTags('lensTags', LENSES, 'lens');
+  renderTags('lightTags', LIGHTINGS, 'lighting');
+
+  const zone = document.getElementById('uploadZone');
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.style.borderColor = '#aaa'; });
+  zone.addEventListener('dragleave', () => { if (!uploadedImageData) zone.style.borderColor = ''; });
+  zone.addEventListener('drop', e => {
+    e.preventDefault();
+    zone.style.borderColor = uploadedImageData ? '' : '';
+    const file = e.dataTransfer.files[0];
+    if (file && file.type.startsWith('image/')) loadImage(file);
+  });
+
+  document.getElementById('strictAngle').addEventListener('change', function() {
+    selectedConfig.strictAngle = this.checked;
+  });
+  document.getElementById('ratioSelect').value = selectedConfig.ratio;
+}
+
+function updateStatus() {
+  const el = document.getElementById('apiStatus');
+  if (!apiKey) { el.textContent = '未连接'; return; }
+  const labels = { anthropic: 'Anthropic', openai: 'OpenAI', gemini: 'Gemini', deepseek: 'DeepSeek', custom: '自定义' };
+  el.textContent = labels[provider] + ' 已连接';
+}
+
+function onProviderChange(resetModel = true) {
+  provider = document.getElementById('providerSelect').value;
+  const def = PROVIDER_DEFAULTS[provider];
+  const modelInput = document.getElementById('modelInput');
+  const endpointInput = document.getElementById('endpointInput');
+
+  if (resetModel || !modelName) {
+    modelName = def.model;
+    modelInput.value = modelName;
+  } else {
+    modelInput.value = modelName;
+  }
+
+  if (provider === 'custom') {
+    endpointInput.style.display = '';
+    endpointInput.value = customEndpoint;
+  } else {
+    endpointInput.style.display = 'none';
+  }
+
+  const keyInput = document.getElementById('apiKeyInput');
+  const placeholders = {
+    anthropic: 'Anthropic Key (sk-ant-api03-...)',
+    openai: 'OpenAI Key (sk-proj-...)',
+    gemini: 'Gemini Key (AIza...)',
+    deepseek: 'DeepSeek Key (sk-...)',
+    custom: 'API Key'
+  };
+  keyInput.placeholder = placeholders[provider];
+
+  updateStatus();
+}
+
+function saveApiKey() {
+  apiKey = document.getElementById('apiKeyInput').value.trim();
+  modelName = document.getElementById('modelInput').value.trim();
+  if (provider === 'custom') {
+    customEndpoint = document.getElementById('endpointInput').value.trim();
+    localStorage.setItem('custom_endpoint', customEndpoint);
+  }
+  if (apiKey) {
+    localStorage.setItem('api_key', apiKey);
+    localStorage.setItem('provider', provider);
+    localStorage.setItem('model_name', modelName);
+    updateStatus();
+    showToast('已连接 ' + modelName);
+  }
+}
+
+// ===== API Calls =====
+function getEndpoint() {
+  if (provider === 'custom') return customEndpoint;
+  return PROVIDER_DEFAULTS[provider].endpoint;
+}
+
+function isVisionSupported() {
+  return provider === 'anthropic' || provider === 'openai' || provider === 'gemini';
+}
+
+async function callVisionAPI(imageDataUrl, prompt) {
+  const base64 = imageDataUrl.replace(/^data:image\/\w+;base64,/, '');
+  const mediaType = imageDataUrl.match(/^data:(image\/\w+);/)?.[1] || 'image/png';
+
+  if (provider === 'anthropic') return callAnthropicVision(base64, mediaType, prompt);
+  if (provider === 'openai') return callOpenAIVision(base64, prompt);
+  if (provider === 'gemini') return callGeminiVision(base64, mediaType, prompt);
+  throw new Error('当前模型不支持图片识别，请切换到 Anthropic / OpenAI / Gemini');
+}
+
+async function callAnthropicVision(base64, mediaType, prompt) {
+  const url = getEndpoint();
+  const body = {
+    model: modelName, max_tokens: 1024,
+    messages: [{ role: 'user', content: [
+      { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
+      { type: 'text', text: prompt }
+    ]}]
+  };
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+    body: JSON.stringify(body)
+  });
+  if (!resp.ok) throw new Error(await parseError(resp, url));
+  const data = await resp.json();
+  return data.content[0].text;
+}
+
+async function callOpenAIVision(base64, prompt) {
+  const url = getEndpoint();
+  const body = {
+    model: modelName, max_tokens: 1024,
+    messages: [{ role: 'user', content: [
+      { type: 'image_url', image_url: { url: `data:image/png;base64,${base64}` } },
+      { type: 'text', text: prompt }
+    ]}]
+  };
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+    body: JSON.stringify(body)
+  });
+  if (!resp.ok) throw new Error(await parseError(resp, url));
+  const data = await resp.json();
+  return data.choices[0].message.content;
+}
+
+// ===== Gemini API =====
+async function callGeminiVision(base64, mediaType, prompt) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+  const body = {
+    contents: [{ parts: [
+      { text: prompt },
+      { inline_data: { mime_type: mediaType, data: base64 } }
+    ]}],
+    generationConfig: { maxOutputTokens: 1024 }
+  };
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  if (!resp.ok) throw new Error(await parseError(resp, url));
+  const data = await resp.json();
+  return data.candidates[0].content.parts[0].text;
+}
+
+async function callGeminiChat(messages) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+  // First message is always our system prompt in this app
+  const systemMsg = messages[0].content;
+  const contents = [];
+  for (let i = 1; i < messages.length; i++) {
+    const msg = messages[i];
+    const role = msg.role === 'assistant' ? 'model' : 'user';
+    contents.push({ role, parts: [{ text: msg.content }] });
+  }
+  // If only system message, treat it as a user turn
+  if (contents.length === 0) {
+    contents.push({ role: 'user', parts: [{ text: systemMsg }] });
+  }
+  const body = {
+    system_instruction: { parts: [{ text: systemMsg }] },
+    contents,
+    generationConfig: { maxOutputTokens: 2048 }
+  };
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  if (!resp.ok) throw new Error(await parseError(resp, url));
+  const data = await resp.json();
+  if (!data.candidates || !data.candidates[0]?.content?.parts?.[0]?.text) {
+    throw new Error('Gemini 返回异常: ' + JSON.stringify(data).substring(0, 200));
+  }
+  return data.candidates[0].content.parts[0].text;
+}
+
+async function callChatAPI(messages) {
+  if (provider === 'anthropic') return callAnthropicChat(messages);
+  if (provider === 'gemini') return callGeminiChat(messages);
+  return callOpenAICompatChat(messages);
+}
+
+async function callAnthropicChat(messages) {
+  const url = getEndpoint();
+  const body = { model: modelName, max_tokens: 2048, messages };
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+    body: JSON.stringify(body)
+  });
+  if (!resp.ok) throw new Error(await parseError(resp, url));
+  const data = await resp.json();
+  return data.content[0].text;
+}
+
+async function callOpenAICompatChat(messages) {
+  const url = getEndpoint();
+  const body = { model: modelName, max_tokens: 2048, messages };
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+    body: JSON.stringify(body)
+  });
+  if (!resp.ok) throw new Error(await parseError(resp, url));
+  const data = await resp.json();
+  return data.choices[0].message.content;
+}
+
+async function parseError(resp, url) {
+  const err = await resp.json().catch(() => ({}));
+  const msg = err.error?.message || err.message || `HTTP ${resp.status}`;
+  let detail = `[${resp.status}] ${msg}`;
+  if (resp.status === 404) detail += ` | 请求地址: ${url} | 模型: ${modelName}`;
+  if (resp.status === 401) detail = 'API Key 无效，请检查 Key 是否正确';
+  if (resp.status === 403) detail = 'API Key 没有访问权限，请检查余额或权限';
+  if (resp.status === 429) detail = '请求太频繁，请稍后再试';
+  return detail;
+}
+
+// ===== Image Analysis =====
+async function analyzeImage() {
+  if (!uploadedImageData) return;
+  if (!apiKey) { showToast('请先输入 API Key 并点击连接'); return; }
+  if (!isVisionSupported()) {
+    showToast('当前模型不支持图片识别，请切换到 Anthropic 或 OpenAI');
+    return;
+  }
+
+  const btn = document.getElementById('analyzeBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ 分析中...';
+  try {
+    const result = await callVisionAPI(uploadedImageData,
+      '请用中文详细描述这张图片，从以下角度分析：主体内容、场景设定、风格参考、色调色彩、构图视角、细节补充。控制在200字以内。');
+    showAnalysis(result);
+  } catch (e) {
+    showAnalysis('分析失败: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🔍 AI 识别参考图';
+  }
+}
+
+function showAnalysis(text) {
+  const el = document.getElementById('analysisResult');
+  el.textContent = text;
+  el.classList.add('show');
+}
+function hideAnalysis() {
+  document.getElementById('analysisResult').classList.remove('show');
+}
+
+// ===== Chat =====
+const chatHistory = [];
+
+function addMessage(role, content) {
+  chatHistory.push({ role, content });
+  const container = document.getElementById('chatMessages');
+  const div = document.createElement('div');
+  div.className = 'message ' + role;
+
+  if (role === 'assistant' && (content.includes('提示词') || content.includes('Prompt') || content.includes('```'))) {
+    // Extract code blocks
+    const codeMatch = content.match(/```[\s\S]*?```/g);
+    if (codeMatch) {
+      let html = escapeHtml(content);
+      codeMatch.forEach(block => {
+        const inner = block.replace(/```\w*\n?/, '').replace(/```$/, '');
+        html = html.replace(escapeHtml(block), '<div class="prompt-block">' + escapeHtml(inner) + '</div>');
+      });
+      div.innerHTML = html;
+    } else {
+      div.textContent = content;
+    }
+  } else {
+    div.textContent = content;
+  }
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML.replace(/\n/g, '<br>');
+}
+
+async function sendMessage() {
+  const input = document.getElementById('chatInput');
+  const text = input.value.trim();
+  if (!text) return;
+  if (!apiKey) { showToast('请先输入 API Key 并点击连接'); return; }
+
+  input.value = '';
+  input.style.height = 'auto';
+  document.getElementById('sendBtn').disabled = true;
+  addMessage('user', text);
+
+  const configSummary = buildConfigSummary();
+  const analysisText = document.getElementById('analysisResult').classList.contains('show')
+    ? document.getElementById('analysisResult').textContent : '';
+
+  let systemPrompt = `你是一个专业的AI生图提示词撰写助手，服务于一个视觉设计团队。团队主要生成商业产品场景图。\n\n`;
+  systemPrompt += `## 用户当前的配置\n${configSummary}\n\n`;
+  if (analysisText) systemPrompt += `## 参考图分析结果\n${analysisText}\n\n`;
+  systemPrompt += `## 提示词撰写要求
+1. 采用标准六要素框架：主体内容 + 场景设定 + 风格参考 + 色调色彩 + 构图视角 + 细节补充
+2. 如果用户勾选了"角度100%严格不变动"，必须在提示词开头加入此约束
+3. 提示词力求精准，使用中文撰写
+4. 追求真实感商业摄影风格，避免AI合成感、塑料感、过度干净
+5. 最后用代码块格式单独给出完整提示词，方便复制`;
+
+  const apiMessages = [{ role: 'user', content: systemPrompt + '\n\n请先确认你理解了以上要求，然后等待用户的指令。用中文回复。' }];
+  const recent = chatHistory.slice(-10);
+  for (const msg of recent) apiMessages.push({ role: msg.role, content: msg.content });
+
+  const typingDiv = document.createElement('div');
+  typingDiv.className = 'message assistant';
+  typingDiv.innerHTML = '<span class="spinner"></span>';
+  document.getElementById('chatMessages').appendChild(typingDiv);
+  document.getElementById('chatMessages').scrollTop = document.getElementById('chatMessages').scrollHeight;
+
+  try {
+    const response = await callChatAPI(apiMessages);
+    typingDiv.remove();
+    addMessage('assistant', response);
+  } catch (e) {
+    typingDiv.remove();
+    addMessage('assistant', '请求出错: ' + e.message);
+  } finally {
+    document.getElementById('sendBtn').disabled = false;
+    document.getElementById('chatInput').focus();
+  }
+}
+
+function buildConfigSummary() {
+  const c = selectedConfig;
+  const parts = [];
+  if (c.scene) parts.push(`场景: ${c.scene}`);
+  if (c.booth && c.booth !== '不指定展位类型') parts.push(`展位: ${c.booth}`);
+  if (c.style) parts.push(`风格: ${c.style}`);
+  parts.push(`比例: ${c.ratio === 'custom' ? `${c.customW}×${c.customH}` : c.ratio}`);
+  if (c.lens) parts.push(`镜头: ${c.lens}`);
+  if (c.lighting) parts.push(`光照: ${c.lighting}`);
+  if (c.strictAngle) parts.push('角度100%严格不变动');
+  return parts.join(' | ') || '未配置';
+}
+
+function generateFromConfig() {
+  if (!apiKey) { showToast('请先输入 API Key 并点击连接'); return; }
+  const c = selectedConfig;
+  const configText = buildConfigSummary();
+  const analysisText = document.getElementById('analysisResult').classList.contains('show')
+    ? document.getElementById('analysisResult').textContent : '';
+
+  let prompt = '';
+  if (analysisText) {
+    prompt = `根据以下参考图分析和配置，请帮我生成一条完整的 AI 生图提示词。\n\n参考图分析：${analysisText}\n\n配置：${configText}`;
+  } else {
+    prompt = `请根据以下配置，帮我生成一条完整的 AI 生图提示词。假设产品是一个高端折叠帐篷/展架。\n\n配置：${configText}`;
+  }
+  if (uploadedImageData) prompt += '\n\n（用户已上传参考图，请根据之前的分析结果来生成提示词）';
+
+  document.getElementById('chatInput').value = prompt;
+  document.getElementById('chatInput').style.height = 'auto';
+  document.getElementById('chatInput').style.height = Math.min(document.getElementById('chatInput').scrollHeight, 100) + 'px';
+  sendMessage();
+}
+
+function usePreset(type) {
+  const presets = {
+    full: '请按照团队的标准六要素框架（主体内容、场景设定、风格参考、色调色彩、构图视角、细节补充），参考我左侧的配置，生成一条完整的中文提示词。',
+    scene: '只关注场景设定和风格参考，帮我生成一段描述环境和氛围的提示词段落，参考我左侧选择的场景和风格。',
+    booth: '请帮我生成一张展位场景图的提示词，需要明确展位类型（如岛型、半岛式、围墙式等）、产品在展位中的位置、周边环境、人群互动等。',
+    detail: '请在我现有提示词的基础上，增强真实感细节描述，包括：光影融合、材质纹理、环境色影响、人物自然状态、避免AI合成感等。',
+    translate: '请将上述中文提示词翻译为英文，保持相同的结构和细节密度，适合直接用于 AI 生图工具。'
+  };
+  const text = presets[type];
+  if (text) {
+    document.getElementById('chatInput').value = text;
+    document.getElementById('chatInput').style.height = 'auto';
+    document.getElementById('chatInput').style.height = Math.min(document.getElementById('chatInput').scrollHeight, 100) + 'px';
+    document.getElementById('chatInput').focus();
+  }
+}
+
+function clearChat() {
+  document.getElementById('chatMessages').innerHTML = '';
+  chatHistory.length = 0;
+  addMessage('system', '对话已清空。你可以继续上传图片、选择配置，然后让我帮你生成提示词。');
+}
+
+function renderTags(containerId, items, configKey) {
+  const container = document.getElementById(containerId);
+  items.forEach(item => {
+    const span = document.createElement('span');
+    span.className = 'tag';
+    span.textContent = item;
+    span.dataset.value = item;
+    span.addEventListener('click', () => {
+      const parent = span.parentElement;
+      if (span.classList.contains('selected')) {
+        span.classList.remove('selected');
+        selectedConfig[configKey] = '';
+      } else {
+        parent.querySelectorAll('.tag.selected').forEach(t => t.classList.remove('selected'));
+        span.classList.add('selected');
+        selectedConfig[configKey] = item;
+      }
+    });
+    container.appendChild(span);
+  });
+}
+
+// ===== Image Upload =====
+function handleImageUpload(event) {
+  const file = event.target.files[0];
+  if (file) loadImage(file);
+}
+function loadImage(file) {
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    uploadedImageData = e.target.result;
+    const zone = document.getElementById('uploadZone');
+    zone.classList.add('has-image');
+    zone.querySelector('.placeholder').style.display = 'none';
+    let img = zone.querySelector('img');
+    if (!img) { img = document.createElement('img'); zone.appendChild(img); }
+    img.src = uploadedImageData;
+    zone.style.borderColor = '';
+    document.getElementById('analyzeBtn').disabled = false;
+  };
+  reader.readAsDataURL(file);
+}
+function clearImage() {
+  uploadedImageData = null;
+  const zone = document.getElementById('uploadZone');
+  zone.classList.remove('has-image');
+  zone.querySelector('.placeholder').style.display = '';
+  const img = zone.querySelector('img');
+  if (img) img.remove();
+  zone.style.borderColor = '';
+  document.getElementById('analyzeBtn').disabled = true;
+  document.getElementById('fileInput').value = '';
+  hideAnalysis();
+}
+
+function onRatioChange() {
+  const val = document.getElementById('ratioSelect').value;
+  selectedConfig.ratio = val;
+  document.getElementById('customSize').style.display = val === 'custom' ? 'flex' : 'none';
+}
+document.getElementById('customW').addEventListener('change', function() {
+  selectedConfig.customW = parseInt(this.value) || 1920;
+});
+document.getElementById('customH').addEventListener('change', function() {
+  selectedConfig.customH = parseInt(this.value) || 1080;
+});
+
+function showToast(msg) {
+  const toast = document.getElementById('toast');
+  toast.textContent = msg;
+  toast.classList.add('show');
+  clearTimeout(toast._timeout);
+  toast._timeout = setTimeout(() => toast.classList.remove('show'), 2000);
+}
+
+document.getElementById('chatInput').addEventListener('input', function() {
+  this.style.height = 'auto';
+  this.style.height = Math.min(this.scrollHeight, 100) + 'px';
+});
+
+init();
+</script>
+</body>
+</html>
