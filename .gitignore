@@ -19,3 +19,6 @@ venv/
 # Node
 node_modules/
 dist/
+
+# API Key 文件（含敏感信息，不提交）
+call_doubao.py
