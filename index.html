@@ -314,6 +314,51 @@ main {
   .left-panel { width: 100%; min-width: 0; max-height: 50vh; }
   .right-panel { min-width: 0; }
 }
+
+/* Image Gallery */
+.image-gallery {
+  display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap;
+}
+.image-gallery .thumb {
+  width: 72px; height: 72px; border-radius: 6px; overflow: hidden;
+  position: relative; border: 1px solid var(--border); flex-shrink: 0;
+}
+.image-gallery .thumb img { width: 100%; height: 100%; object-fit: cover; }
+.image-gallery .thumb .remove-btn-sm {
+  position: absolute; top: 2px; right: 2px; width: 18px; height: 18px;
+  background: rgba(0,0,0,0.5); color: #fff; border: none; border-radius: 50%;
+  font-size: 10px; cursor: pointer; display: flex;
+  align-items: center; justify-content: center; line-height: 1;
+}
+.image-gallery .thumb .label {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  background: rgba(0,0,0,0.5); color: #fff; font-size: 9px;
+  text-align: center; padding: 2px 0; line-height: 1.2;
+}
+.upload-zone { min-height: 120px; height: auto; padding: 16px; }
+.upload-zone.has-image { height: auto; min-height: 80px; padding: 16px; }
+.template-section { padding: 14px 16px; border-bottom: 1px solid var(--border); }
+.template-section h3 {
+  font-size: 12px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.5px; color: var(--text-secondary); margin-bottom: 10px;
+}
+.template-actions { display: flex; gap: 6px; margin-bottom: 8px; }
+.template-actions button {
+  flex: 1; padding: 7px 0; font-size: 12px; border: 1px solid var(--border);
+  border-radius: 6px; background: var(--input-bg); cursor: pointer; color: var(--text);
+}
+.template-actions button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.template-list { display: flex; flex-direction: column; gap: 4px; max-height: 150px; overflow-y: auto; }
+.template-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 10px; background: var(--tag-bg); border-radius: 6px; font-size: 12px;
+}
+.template-item .name { flex: 1; cursor: pointer; }
+.template-item .name:hover { color: var(--accent); }
+.template-item .del-btn {
+  font-size: 11px; color: var(--danger); cursor: pointer;
+  background: none; border: none; padding: 2px 4px;
+}
 </style>
 </head>
 <body>
@@ -344,15 +389,15 @@ main {
       <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
         <div class="placeholder">
           <div class="icon">🖼️</div>
-          <div>点击或拖拽上传参考图</div>
-          <div style="font-size:10px;color:#aaa;">支持 JPG / PNG / WebP</div>
+          <div>点击或拖拽上传参考图（支持多张）</div>
+          <div style="font-size:10px;color:#aaa;">JPG / PNG / WebP · 多张可同时上传</div>
         </div>
-        <button class="remove-btn" onclick="event.stopPropagation(); clearImage()">✕</button>
       </div>
-      <input type="file" id="fileInput" accept="image/*" style="display:none" onchange="handleImageUpload(event)" />
+      <div class="image-gallery" id="imageGallery"></div>
+      <input type="file" id="fileInput" accept="image/*" multiple style="display:none" onchange="handleImageUpload(event)" />
       <div class="upload-actions">
         <button class="primary" id="analyzeBtn" onclick="analyzeImage()" disabled>🔍 AI 识别参考图</button>
-        <button onclick="document.getElementById('fileInput').click()">重新选择</button>
+        <button onclick="document.getElementById('fileInput').click()">添加图片</button>
       </div>
       <div class="analysis-result" id="analysisResult"></div>
     </div>
@@ -416,6 +461,13 @@ main {
         角度100%严格不变动，严格遵循画布占比
       </label>
     </div>
+    <div class="template-section">
+      <h3>配置模板</h3>
+      <div class="template-actions">
+        <button class="primary" onclick="saveTemplate()">💾 保存当前配置</button>
+      </div>
+      <div class="template-list" id="templateList"></div>
+    </div>
   </div>
 
   <!-- Right Panel -->
@@ -458,7 +510,8 @@ main {
 
 <script>
 // ===== State =====
-let uploadedImageData = null;
+let uploadedImages = [];
+let imageCounter = 0;
 let apiKey = localStorage.getItem('api_key') || '';
 let provider = localStorage.getItem('provider') || 'anthropic';
 let modelName = localStorage.getItem('model_name') || '';
@@ -505,6 +558,88 @@ const LIGHTINGS = [
   '柔和漫射光', '阴天柔和光', '日落逆光'
 ];
 
+// ===== Templates =====
+const TEMPLATES_KEY = 'prompt_templates';
+function saveTemplate() {
+  var name = prompt('请为当前配置命名：');
+  if (!name || !name.trim()) return;
+  var templates = JSON.parse(localStorage.getItem(TEMPLATES_KEY) || '[]');
+  var tpl = {
+    name: name.trim(), savedAt: new Date().toLocaleString(),
+    config: {
+      scene: selectedConfig.scene.slice(),
+      booth: selectedConfig.booth.slice(),
+      style: selectedConfig.style.slice(),
+      lens: selectedConfig.lens.slice(),
+      lighting: selectedConfig.lighting.slice(),
+      ratio: selectedConfig.ratio, customW: selectedConfig.customW,
+      customH: selectedConfig.customH, strictAngle: selectedConfig.strictAngle
+    },
+    analysis: (document.getElementById('analysisResult').classList.contains('show') ? document.getElementById('analysisResult').textContent : '')
+  };
+  var existing = -1;
+  for (var i = 0; i < templates.length; i++) { if (templates[i].name === tpl.name) { existing = i; break; } }
+  if (existing >= 0) templates[existing] = tpl; else templates.push(tpl);
+  localStorage.setItem(TEMPLATES_KEY, JSON.stringify(templates));
+  renderTemplateList();
+  showToast('模板已保存: ' + tpl.name);
+}
+function loadTemplate(name) {
+  var templates = JSON.parse(localStorage.getItem(TEMPLATES_KEY) || '[]');
+  var t = null;
+  for (var i = 0; i < templates.length; i++) { if (templates[i].name === name) { t = templates[i]; break; } }
+  if (!t) return;
+  selectedConfig.scene = t.config.scene || [];
+  selectedConfig.booth = t.config.booth || [];
+  selectedConfig.style = t.config.style || [];
+  selectedConfig.lens = t.config.lens || [];
+  selectedConfig.lighting = t.config.lighting || [];
+  selectedConfig.ratio = t.config.ratio || '16:9';
+  selectedConfig.customW = t.config.customW || 1920;
+  selectedConfig.customH = t.config.customH || 1080;
+  selectedConfig.strictAngle = t.config.strictAngle !== false;
+  document.querySelectorAll('.tag-group').forEach(function(g) { g.querySelectorAll('.tag').forEach(function(tag) { tag.classList.remove('selected'); }); });
+  ['scene','booth','style','lens','lighting'].forEach(function(key) {
+    var group = document.getElementById(key + 'Tags');
+    if (!group) return;
+    group.querySelectorAll('.tag').forEach(function(tag) {
+      if (selectedConfig[key].indexOf(tag.dataset.value) >= 0) tag.classList.add('selected');
+    });
+  });
+  document.getElementById('ratioSelect').value = selectedConfig.ratio;
+  document.getElementById('customSize').style.display = selectedConfig.ratio === 'custom' ? 'flex' : 'none';
+  if (selectedConfig.ratio === 'custom') {
+    document.getElementById('customW').value = selectedConfig.customW;
+    document.getElementById('customH').value = selectedConfig.customH;
+  }
+  document.getElementById('strictAngle').checked = selectedConfig.strictAngle;
+  if (t.analysis) { showAnalysis(t.analysis); } else { hideAnalysis(); }
+  showToast('已加载模板: ' + name);
+}
+function deleteTemplate(name) {
+  if (!confirm('确定删除模板 \"' + name + '\" 吗？')) return;
+  var templates = JSON.parse(localStorage.getItem(TEMPLATES_KEY) || '[]');
+  templates = templates.filter(function(t) { return t.name !== name; });
+  localStorage.setItem(TEMPLATES_KEY, JSON.stringify(templates));
+  renderTemplateList();
+}
+function renderTemplateList() {
+  var list = document.getElementById('templateList');
+  if (!list) return;
+  var templates = JSON.parse(localStorage.getItem(TEMPLATES_KEY) || '[]');
+  if (templates.length === 0) {
+    list.innerHTML = '<div style="font-size:11px;color:var(--text-secondary);padding:4px 0;">暂无保存的模板</div>';
+    return;
+  }
+  var html = '';
+  for (var i = 0; i < templates.length; i++) {
+    var t = templates[i];
+    var safe = t.name.replace(/'/g, "\\'");
+    html += '<div class="template-item"><span class="name" onclick="loadTemplate(\'' + safe + '\')">' + t.name + '</span><button class="del-btn" onclick="deleteTemplate(\'' + safe + '\')">✕</button></div>';
+  }
+  list.innerHTML = html;
+}
+
 // ===== Init =====
 function init() {
   document.getElementById('providerSelect').value = provider;
@@ -520,14 +655,17 @@ function init() {
 
   const zone = document.getElementById('uploadZone');
   zone.addEventListener('dragover', e => { e.preventDefault(); zone.style.borderColor = '#aaa'; });
-  zone.addEventListener('dragleave', () => { if (!uploadedImageData) zone.style.borderColor = ''; });
+  zone.addEventListener('dragleave', () => { if (uploadedImages.length === 0) zone.style.borderColor = ''; });
   zone.addEventListener('drop', e => {
     e.preventDefault();
-    zone.style.borderColor = uploadedImageData ? '' : '';
-    const file = e.dataTransfer.files[0];
-    if (file && file.type.startsWith('image/')) loadImage(file);
+    zone.style.borderColor = '';
+    const files = e.dataTransfer.files;
+    for (let fi = 0; fi < files.length; fi++) {
+      if (files[fi] && files[fi].type.startsWith('image/')) loadImage(files[fi]);
+    }
   });
 
+  renderTemplateList();
   document.getElementById('strictAngle').addEventListener('change', function() {
     selectedConfig.strictAngle = this.checked;
   });
@@ -603,11 +741,48 @@ function isVisionSupported() {
 async function callVisionAPI(imageDataUrl, prompt) {
   const base64 = imageDataUrl.replace(/^data:image\/\w+;base64,/, '');
   const mediaType = imageDataUrl.match(/^data:(image\/\w+);/)?.[1] || 'image/png';
-
   if (provider === 'anthropic') return callAnthropicVision(base64, mediaType, prompt);
   if (provider === 'openai') return callOpenAIVision(base64, prompt);
   if (provider === 'gemini') return callGeminiVision(base64, mediaType, prompt);
   throw new Error('当前模型不支持图片识别，请切换到 Anthropic / OpenAI / Gemini');
+}
+
+async function callMultiVision(images, prompt) {
+  const items = images.map(function(img) {
+    return {
+      data: img.dataUrl.replace(/^data:image\/\w+;base64,/, ''),
+      name: img.name,
+      mediaType: (img.dataUrl.match(/^data:(image\/\w+);/) || ['', 'image/png'])[1]
+    };
+  });
+  if (provider === 'anthropic') {
+    const url = getEndpoint();
+    const content = items.map(function(it) { return { type: 'image', source: { type: 'base64', media_type: it.mediaType, data: it.data } }; });
+    content.push({ type: 'text', text: prompt });
+    const body = { model: modelName, max_tokens: 1024, messages: [{ role: 'user', content: content }] };
+    const resp = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' }, body: JSON.stringify(body) });
+    if (!resp.ok) throw new Error(await parseError(resp, url));
+    return (await resp.json()).content[0].text;
+  }
+  if (provider === 'openai') {
+    const url = getEndpoint();
+    const content = items.map(function(it) { return { type: 'image_url', image_url: { url: 'data:' + it.mediaType + ';base64,' + it.data } }; });
+    content.push({ type: 'text', text: prompt });
+    const body = { model: modelName, max_tokens: 1024, messages: [{ role: 'user', content: content }] };
+    const resp = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey }, body: JSON.stringify(body) });
+    if (!resp.ok) throw new Error(await parseError(resp, url));
+    return (await resp.json()).choices[0].message.content;
+  }
+  if (provider === 'gemini') {
+    const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + modelName + ':generateContent?key=' + apiKey;
+    const parts = items.map(function(it) { return { inline_data: { mime_type: it.mediaType, data: it.data } }; });
+    parts.push({ text: prompt });
+    const body = { contents: [{ parts: parts }], generationConfig: { maxOutputTokens: 1024 } };
+    const resp = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if (!resp.ok) throw new Error(await parseError(resp, url));
+    return (await resp.json()).candidates[0].content.parts[0].text;
+  }
+  throw new Error('当前模型不支持图片识别');
 }
 
 async function callAnthropicVision(base64, mediaType, prompt) {
@@ -745,19 +920,25 @@ async function parseError(resp, url) {
 
 // ===== Image Analysis =====
 async function analyzeImage() {
-  if (!uploadedImageData) return;
+  if (uploadedImages.length === 0) return;
   if (!apiKey) { showToast('请先输入 API Key 并点击连接'); return; }
   if (!isVisionSupported()) {
     showToast('当前模型不支持图片识别，请切换到 Anthropic 或 OpenAI');
     return;
   }
-
   const btn = document.getElementById('analyzeBtn');
   btn.disabled = true;
   btn.textContent = '⏳ 分析中...';
   try {
-    const result = await callVisionAPI(uploadedImageData,
-      '请用中文详细描述这张图片，从以下角度分析：主体内容、场景设定、风格参考、色调色彩、构图视角、细节补充。控制在200字以内。');
+    var result;
+    if (uploadedImages.length === 1) {
+      result = await callVisionAPI(uploadedImages[0].dataUrl, '请用中文详细描述这张图片，从以下角度分析：主体内容、场景设定、风格参考、色调色彩、构图视角、细节补充。控制在200字以内。');
+    } else {
+      var prompt = '我有以下多张参考图片，请分别分析每张图片的内容。';
+      uploadedImages.forEach(function(img, i) { prompt += '\n【图片' + (i+1) + ': ' + img.name + '】请从主体内容、场景设定、风格参考、色调色彩、构图视角、细节补充角度分析。'; });
+      prompt += '\n\n最后给出综合建议：这些图片的组合适合用于什么类型的生图提示词？';
+      result = await callMultiVision(uploadedImages, prompt);
+    }
     showAnalysis(result);
   } catch (e) {
     showAnalysis('分析失败: ' + e.message);
@@ -888,7 +1069,7 @@ function generateFromConfig() {
   } else {
     prompt = `请根据以下配置，帮我生成一条完整的 AI 生图提示词。假设产品是一个高端折叠帐篷/展架。\n\n配置：${configText}`;
   }
-  if (uploadedImageData) prompt += '\n\n（用户已上传参考图，请根据之前的分析结果来生成提示词）';
+  if (uploadedImages.length > 0) prompt += '\n\n（用户已上传参考图，请根据之前的分析结果来生成提示词）';
 
   document.getElementById('chatInput').value = prompt;
   document.getElementById('chatInput').style.height = 'auto';
@@ -939,37 +1120,56 @@ function renderTags(containerId, items, configKey) {
   });
 }
 
-// ===== Image Upload =====
+// ===== Image Upload (Multi) =====
 function handleImageUpload(event) {
-  const file = event.target.files[0];
-  if (file) loadImage(file);
+  var files = event.target.files;
+  for (var fi = 0; fi < files.length; fi++) {
+    if (files[fi] && files[fi].type.startsWith('image/')) loadImage(files[fi]);
+  }
+  event.target.value = '';
 }
 function loadImage(file) {
-  const reader = new FileReader();
+  var reader = new FileReader();
+  var id = ++imageCounter;
   reader.onload = function(e) {
-    uploadedImageData = e.target.result;
-    const zone = document.getElementById('uploadZone');
-    zone.classList.add('has-image');
-    zone.querySelector('.placeholder').style.display = 'none';
-    let img = zone.querySelector('img');
-    if (!img) { img = document.createElement('img'); zone.appendChild(img); }
-    img.src = uploadedImageData;
-    zone.style.borderColor = '';
+    uploadedImages.push({ id: id, dataUrl: e.target.result, name: file.name, fileType: file.type });
+    renderGallery();
     document.getElementById('analyzeBtn').disabled = false;
+    document.getElementById('uploadZone').classList.add('has-image');
   };
   reader.readAsDataURL(file);
 }
-function clearImage() {
-  uploadedImageData = null;
-  const zone = document.getElementById('uploadZone');
-  zone.classList.remove('has-image');
-  zone.querySelector('.placeholder').style.display = '';
-  const img = zone.querySelector('img');
-  if (img) img.remove();
-  zone.style.borderColor = '';
+function removeImage(id) {
+  uploadedImages = uploadedImages.filter(function(img) { return img.id !== id; });
+  renderGallery();
+  if (uploadedImages.length === 0) {
+    document.getElementById('analyzeBtn').disabled = true;
+    document.getElementById('uploadZone').classList.remove('has-image');
+    hideAnalysis();
+  }
+}
+function clearAllImages() {
+  uploadedImages = [];
+  imageCounter = 0;
+  renderGallery();
   document.getElementById('analyzeBtn').disabled = true;
+  document.getElementById('uploadZone').classList.remove('has-image');
   document.getElementById('fileInput').value = '';
   hideAnalysis();
+}
+function renderGallery() {
+  var gallery = document.getElementById('imageGallery');
+  gallery.innerHTML = '';
+  for (var i = 0; i < uploadedImages.length; i++) {
+    var img = uploadedImages[i];
+    var div = document.createElement('div');
+    div.className = 'thumb';
+    var sn = img.name.length > 12 ? img.name.substring(0, 12) + '...' : img.name;
+    div.innerHTML = '<img src="' + img.dataUrl + '" alt="' + img.name + '" />' +
+      '<button class="remove-btn-sm" onclick="removeImage(' + img.id + ')">✕</button>' +
+      '<div class="label">' + sn + '</div>';
+    gallery.appendChild(div);
+  }
 }
 
 function onRatioChange() {
