@@ -464,8 +464,8 @@ let provider = localStorage.getItem('provider') || 'anthropic';
 let modelName = localStorage.getItem('model_name') || '';
 let customEndpoint = localStorage.getItem('custom_endpoint') || '';
 let selectedConfig = {
-  scene: '', booth: '', style: '', ratio: '16:9',
-  customW: 1920, customH: 1080, lens: '', lighting: '', strictAngle: true
+  scene: [], booth: [], style: [], ratio: '16:9',
+  customW: 1920, customH: 1080, lens: [], lighting: [], strictAngle: true
 };
 
 // ===== Provider Defaults =====
@@ -862,12 +862,15 @@ async function sendMessage() {
 function buildConfigSummary() {
   const c = selectedConfig;
   const parts = [];
-  if (c.scene) parts.push(`场景: ${c.scene}`);
-  if (c.booth && c.booth !== '不指定展位类型') parts.push(`展位: ${c.booth}`);
-  if (c.style) parts.push(`风格: ${c.style}`);
+  if (c.scene.length > 0) parts.push(`场景: ${c.scene.join('、')}`);
+  if (c.booth.length > 0) {
+    const filtered = c.booth.filter(v => v !== '不指定展位类型');
+    if (filtered.length > 0) parts.push(`展位: ${filtered.join('、')}`);
+  }
+  if (c.style.length > 0) parts.push(`风格: ${c.style.join('、')}`);
   parts.push(`比例: ${c.ratio === 'custom' ? `${c.customW}×${c.customH}` : c.ratio}`);
-  if (c.lens) parts.push(`镜头: ${c.lens}`);
-  if (c.lighting) parts.push(`光照: ${c.lighting}`);
+  if (c.lens.length > 0) parts.push(`镜头: ${c.lens.join('、')}`);
+  if (c.lighting.length > 0) parts.push(`光照: ${c.lighting.join('、')}`);
   if (c.strictAngle) parts.push('角度100%严格不变动');
   return parts.join(' | ') || '未配置';
 }
@@ -924,14 +927,12 @@ function renderTags(containerId, items, configKey) {
     span.textContent = item;
     span.dataset.value = item;
     span.addEventListener('click', () => {
-      const parent = span.parentElement;
       if (span.classList.contains('selected')) {
         span.classList.remove('selected');
-        selectedConfig[configKey] = '';
+        selectedConfig[configKey] = selectedConfig[configKey].filter(v => v !== item);
       } else {
-        parent.querySelectorAll('.tag.selected').forEach(t => t.classList.remove('selected'));
         span.classList.add('selected');
-        selectedConfig[configKey] = item;
+        selectedConfig[configKey].push(item);
       }
     });
     container.appendChild(span);
